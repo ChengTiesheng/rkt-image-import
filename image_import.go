@@ -38,7 +38,7 @@ import (
 var (
 	cmdImageImport = &cobra.Command{
 		Use:   "import OCI-BUNDLE OUTPUT_ACI_FILE",
-		Short: "Import an oci-bundle directory and convert it to aci image",
+		Short: "Convert imported oci-bundle to aci image",
 		Long:  "Import an oci-bundle directory as input, export an aci image as output",
 		Run:   runWrapper(runImageImport),
 	}
@@ -57,13 +57,13 @@ func runImageImport(cmd *cobra.Command, args []string) (exit int) {
 	outFile := args[1]
 	ext := filepath.Ext(outFile)
 	if ext != schema.ACIExtension {
-		stderr("build: Extension must be %s (given %s)", schema.ACIExtension, ext)
+		stderr("rkt: Extension must be %s (given %s)", schema.ACIExtension, ext)
 		return 1
 	}
 
 	aciImgPath, err := oci2aciImage(args[0])
 	if err != nil {
-		stderr("build: oci2aci failed: %s", err)
+		stderr("rkt: oci2aci failed: %s", err)
 		return 1
 	}
 
@@ -81,6 +81,10 @@ func oci2aciImage(ociPath string) (string, error) {
 	}
 
 	dirWork := createWorkDir()
+	if dirWork == "" {
+		err := errors.New("Create working directory failed.")
+		return "", err
+	}
 	// First, convert layout
 	_, err := convertLayout(ociPath, dirWork)
 	if err != nil {
@@ -159,11 +163,17 @@ func genManifest(path string) *schema.ImageManifest {
 
 	runtime, err := ioutil.ReadFile(runtimePath)
 	if err != nil {
+		if globalFlags.Debug {
+			stderr("Open file runtime.json failed:%v", err)
+		}
 		return nil
 	}
 
 	config, err := ioutil.ReadFile(configPath)
 	if err != nil {
+		if globalFlags.Debug {
+			stderr("Open file config.json failed:%v", err)
+		}
 		return nil
 	}
 
@@ -173,6 +183,7 @@ func genManifest(path string) *schema.ImageManifest {
 		if globalFlags.Debug {
 			stderr("Unmarshal file config.json failed:%v", err)
 		}
+
 		return nil
 	}
 
@@ -182,6 +193,7 @@ func genManifest(path string) *schema.ImageManifest {
 		if globalFlags.Debug {
 			stderr("Unmarshal file runtime.json failed:%v", err)
 		}
+
 		return nil
 	}
 	// Begin to convert runtime.json/config.json to manifest
